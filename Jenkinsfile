@@ -2,41 +2,52 @@ pipeline {
     agent any
 
     environment {
-        VENV = 'venv'
+        IMAGE_NAME = "shivamdebug/minfy-python-demo"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
-        stage ("Install") {
+        stage('Checkout') {
             steps {
-                sh '''
-                    python3 -m venv $VENV
-                    . $VENV/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                '''
+                checkout scm
             }
         }
-        stage ("Linting") {
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    echo "This is my Linting Step"
-                }
-            }
-        }
-        stage ("Install Packages") {
-            steps {
-                script {
-                    echo "This is Install PAkcges Step"
-                }
-            }
-        }
-        stage ("Run Application") {
-            steps {
-                script {
-                    echo "This is my Run applcaition Step"
+                    dockerImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
                 }
             }
         }
 
+        stage('Test') {
+            steps {
+                sh "docker run --rm ${IMAGE_NAME}:${IMAGE_TAG} python -m pytest tests/tests_main.py"
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        dockerImage.push()
+                        dockerImage.push('latest')
+                    }
+                }
+            }
+        }
+
+        stage('Pull Image') {
+            steps {
+                sh "docker pull ${IMAGE_NAME}:${IMAGE_TAG}"
+            }
+        }
+
+        stage('Run Container') {
+            steps {
+                sh "docker run --rm ${IMAGE_NAME}:${IMAGE_TAG}"
+            }
+        }
     }
 }
